@@ -87,7 +87,6 @@ The accompanying diagram shows this flow, illustrating how prompts move through 
 
 This approach is particularly powerful because it can discover prompt patterns that humans might not think of. By trying many combinations and keeping what works best, the system can find increasingly effective ways to instruct the AI model to generate high-quality code.
 
-Would you like me to elaborate on any particular aspect of how the program works?
 
 ```elixir
 # First, let's set up our dependencies
