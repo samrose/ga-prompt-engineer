@@ -26,10 +26,9 @@
 
           # Ollama dependencies
           ollama
-          nvidia-docker  # For GPU support if available
-
+ 
           # Elixir and Livebook dependencies
-          beam.packages.erlangR27.elixir
+          beam.packages.erlang_27.elixir
           livebook
         ];
 
