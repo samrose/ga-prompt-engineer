@@ -2,6 +2,93 @@
 
 ## Introduction
 
+<!-- Learn more at https://mermaid-js.github.io/mermaid -->
+
+```mermaid
+flowchart TD
+    Start[Start Program] --> Init[Initialize Population of Prompts]
+    Init --> EvLoop{Evolution Loop}
+    
+    subgraph Generation[Generation Cycle]
+        EvLoop --> Eval[Evaluate Population]
+        
+        subgraph Evaluation[Evaluation Process]
+            Eval --> SendP[Send Prompt to Ollama]
+            SendP --> GenCode[Generate Code]
+            GenCode --> EvalCode[Evaluate Generated Code]
+            EvalCode --> AssignFit[Assign Fitness Score]
+        end
+        
+        AssignFit --> Select[Select Parents]
+        Select --> Cross[Crossover]
+        Cross --> Mutate[Mutation]
+        Mutate --> NewPop[Create New Population]
+    end
+    
+    NewPop --> CheckGen{Check Generation Count}
+    CheckGen -->|Max Generations Not Reached| EvLoop
+    CheckGen -->|Max Generations Reached| End[Return Best Prompt]
+    
+    subgraph Components[Prompt Components]
+        PC[Template Parts]
+        PC --> Context[Context Setting]
+        PC --> Task[Task Description]
+        PC --> Reqs[Requirements]
+        PC --> Output[Output Specification]
+        PC --> Lang[Language Choice]
+        PC --> Extra[Additional Instructions]
+    end
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+This program implements a genetic algorithm to evolve and optimize prompts for generating code through Ollama. How it works and its key components:
+
+The program operates like a selective breeding process for prompts, similar to how nature evolves organisms over generations. Instead of breeding plants or animals, we're evolving prompts to generate better code. Here's how it works:
+
+First, the program creates prompts by combining different components. Think of these components as building blocks for our prompts. Each prompt is made up of six essential parts:
+
+1. Context Setting: This introduces the request (e.g., "As an expert programmer")
+2. Task Description: This explains what needs to be done (e.g., "implement a function to")
+3. Requirements: This specifies quality expectations (e.g., "is efficient and well-documented")
+4. Output Specification: This indicates how to present the solution
+5. Language Choice: This specifies the programming language to use
+6. Additional Instructions: This provides extra guidance or requirements
+
+The evolution process works through several key steps:
+
+1. Population Initialization: The program starts by creating multiple different prompts by randomly combining these components. This is like creating an initial population of organisms with different genetic traits.
+
+2. Evaluation Process: Each prompt goes through a two-step evaluation:
+
+   * First, the prompt is sent to Ollama, which generates code based on the prompt
+   * Then, the generated code is evaluated using a separate evaluation prompt that scores various aspects like clarity, efficiency, correctness, style, and documentation
+
+3. Selection and Evolution: The program then uses several genetic algorithm techniques:
+
+   * Elite Selection: The best-performing prompts are automatically kept for the next generation
+   * Tournament Selection: Prompts compete in small groups to become parents
+   * Crossover: Parts of two parent prompts are combined to create new prompts
+   * Mutation: Random changes are introduced to maintain diversity
+
+4. Iteration: This process repeats for multiple generations, with each generation potentially producing better prompts than the last.
+
+The program uses several parameters to control this evolution:
+
+* Population size determines how many prompts exist in each generation
+* Maximum generations sets how long the evolution runs
+* Mutation rate controls how often random changes occur
+* Elite size determines how many top performers automatically survive
+* Tournament size affects how selective the breeding process is
+
+The goal is to find prompts that consistently generate high-quality code. The fitness score comes from evaluating the actual code that Ollama generates, not just the prompt itself. This ensures we're optimizing for real-world results rather than just how the prompt looks.
+
+The accompanying diagram shows this flow, illustrating how prompts move through the system, get evaluated, and evolve over time. The left side shows the main evolution loop, while the right side shows the components that make up each prompt. The evaluation process is highlighted in its own section to show the important two-step process of generating and then evaluating code.
+
+This approach is particularly powerful because it can discover prompt patterns that humans might not think of. By trying many combinations and keeping what works best, the system can find increasingly effective ways to instruct the AI model to generate high-quality code.
+
+Would you like me to elaborate on any particular aspect of how the program works?
+
 ```elixir
 # First, let's set up our dependencies
 Mix.install([
