@@ -1,0 +1,295 @@
+# codellama-ga-optimize
+
+```elixir
+ {:genex, "~> 0.1.0"}
+  {:httpoison, "~> 2.0"}
+  {:jason, "~> 1.4"}
+```
+
+## Section
+
+### Introduction
+
+The system combines evolutionary computation with AI code evaluation to generate and optimize Python functions. Here's a detailed explanation of the process:
+
+The system works through several key components:
+
+1. Code Generation System:
+
+   * The algorithm maintains a set of code template parts, like puzzle pieces that can be combined to create complete Python functions
+   * Each template part has multiple variations (for example, different ways to declare a function or handle errors)
+   * These parts are structured to ensure the generated code is syntactically valid Python
+
+2. Genetic Algorithm Core:
+
+   * Population: A group of potential solutions, where each individual is a complete Python function
+   * Genes: Each individual's genes represent specific choices from the template parts
+   * Fitness: Determined by CodeLlama's evaluation of the code quality
+   * Evolution: Uses selection, crossover, and mutation to improve solutions over generations
+
+3. AI Evaluation System:
+
+   * Uses CodeLlama to analyze each generated piece of code
+   * Evaluates multiple aspects: correctness, error handling, performance, security, and maintainability
+   * Provides a numerical score that guides the evolutionary process
+
+4. Evolution Process:
+
+   * Tournament Selection: Picks parents based on their fitness scores
+   * Crossover: Combines parts of two parent solutions to create new solutions
+   * Mutation: Randomly changes some parts to maintain diversity
+   * Elitism: Preserves the best solutions across generations
+
+The system follows this workflow:
+
+1. Initialization:
+
+   * Creates an initial population of random code combinations
+   * Each piece of code is assembled from the template parts
+
+2. Evaluation:
+
+   * Sends each code solution to CodeLlama
+   * Gets back detailed scoring and feedback
+   * Extracts a numerical fitness score
+
+3. Evolution:
+
+   * Selects better-performing solutions as parents
+   * Creates new solutions through crossover
+   * Applies random mutations to maintain diversity
+   * Keeps the best solutions through elitism
+
+4. Iteration:
+
+   * Repeats the process for multiple generations
+   * Gradually improves the quality of the code
+   * Stops when reaching the generation limit or quality threshold
+
+This creates a feedback loop where the AI evaluation guides the evolutionary process toward better code solutions. The genetic algorithm explores the space of possible code combinations, while CodeLlama provides informed feedback about code quality, creating a system that can generate and optimize Python functions automatically.
+
+<!-- livebook:{"break_markdown":true} -->
+
+```mermaid
+flowchart TD
+    A[Initialize Population] --> B[Generate Random Code Combinations]
+    B --> C[Evaluate Population]
+    
+    subgraph Evaluation Process
+        C --> D[Send Code to CodeLlama]
+        D --> E[Score Code Quality]
+        E --> F[Extract Numerical Score]
+    end
+    
+    F --> G{Check Generation Limit}
+    G -->|Not Reached| H[Selection]
+    H --> I[Crossover]
+    I --> J[Mutation]
+    J --> C
+    
+    G -->|Limit Reached| K[Return Best Solution]
+    
+    subgraph Code Template Parts
+        L[Function Declaration]
+        M[Parameter Style]
+        N[Error Handling]
+        O[Processing Logic]
+        P[Return Statement]
+    end
+    
+    L & M & N & O & P --> B
+
+```
+
+```elixir
+Mix.install([
+  {:genex, "~> 0.1.0"},
+  {:httpoison, "~> 2.0"},
+  {:jason, "~> 1.4"}
+])
+
+defmodule Individual do
+  defstruct [:genes, :fitness]
+end
+
+defmodule GAOllama do
+  @base_url "http://localhost:11434/api"
+  
+  def evaluate_code(code) do
+    prompt = """
+    Evaluate this code and provide scores in the following format:
+
+    SCORES (1-10):
+    Correctness: [score]
+    Error Handling: [score]
+    Performance: [score]
+    Security: [score]
+    Maintainability: [score]
+    
+    Then provide a brief explanation for each score.
+    Finally, calculate and show the TOTAL SCORE as an average.
+
+    CODE TO EVALUATE:
+    #{code}
+
+    Remember: Always include numerical scores and the final average.
+    """
+
+    url = @base_url <> "/generate"
+    
+    body = %{
+      model: "codellama:7b",
+      prompt: prompt,
+      stream: false,
+      options: %{
+        num_predict: 500
+      }
+    }
+    
+    try do
+      response = HTTPoison.post!(url, Jason.encode!(body), 
+        [{"Content-Type", "application/json"}],
+        [timeout: 60_000, recv_timeout: 60_000])
+
+      with {:ok, decoded} <- Jason.decode(response.body),
+           %{"response" => text} <- decoded,
+           [_, score] <- Regex.run(~r/(?:TOTAL SCORE|Average)[:\s]+(\d+\.?\d*)/, text),
+           {num, _} <- Float.parse(score) do
+        {:ok, num, text}
+      else
+        _ -> {:error, 0.0, "Failed to extract score"}
+      end
+    rescue
+      e -> {:error, 0.0, "HTTP error: #{inspect(e)}"}
+    end
+  end
+end
+
+defmodule GA do
+  @template_parts [
+    ["def", "async def", "def async"],
+    ["(data):", "(items):", "(values):"],
+    ["try:", "if data:", "if len(data) > 0:"],
+    ["    result = []", "    output = []", "    processed = []"],
+    ["    for item in data:", "    for i, item in enumerate(data):", "    while data:"],
+    ["        result.append(item)", "        output.append(process(item))", "        processed.extend([item])"],
+    ["    return result", "    return output", "    return processed"]
+  ]
+
+  def run(config) do
+    population = initialize_population(config.population_size)
+    run_evolution(population, config, 1)
+  end
+
+  defp initialize_population(size) do
+    for _ <- 1..size do
+      %Individual{
+        genes: Enum.map(@template_parts, &Enum.random/1),
+        fitness: nil
+      }
+    end
+  end
+
+  defp run_evolution(population, config, generation) do
+    evaluated_pop = evaluate_population(population)
+    best = Enum.max_by(evaluated_pop, & &1.fitness)
+    
+    IO.puts("\nGeneration #{generation}")
+    IO.puts("Best Fitness: #{best.fitness}")
+    IO.puts("Best Individual:")
+    IO.puts(create_code(best))
+
+    if generation >= config.max_generations do
+      best
+    else
+      new_population = 
+        evolve_population(evaluated_pop, config)
+        |> Enum.map(&maybe_mutate(&1, config.mutation_rate))
+
+      run_evolution(new_population, config, generation + 1)
+    end
+  end
+
+  defp evaluate_population(population) do
+    Enum.map(population, &evaluate_individual/1)
+  end
+
+  defp evaluate_individual(individual) do
+    code = create_code(individual)
+    case GAOllama.evaluate_code(code) do
+      {:ok, score, _} -> %{individual | fitness: score}
+      {:error, score, _} -> %{individual | fitness: score}
+    end
+  end
+
+  def create_code(individual) do
+    Enum.join(individual.genes, "\n")
+  end
+
+  defp evolve_population(population, config) do
+    elites = 
+      population
+      |> Enum.sort_by(& &1.fitness, :desc)
+      |> Enum.take(config.elite_size)
+
+    num_children = config.population_size - config.elite_size
+
+    children =
+      for _ <- 1..num_children do
+        parent1 = select_parent(population, config.tournament_size)
+        parent2 = select_parent(population, config.tournament_size)
+        crossover(parent1, parent2)
+      end
+
+    elites ++ children
+  end
+
+  defp select_parent(population, tournament_size) do
+    population
+    |> Enum.take_random(tournament_size)
+    |> Enum.max_by(& &1.fitness)
+  end
+
+  defp crossover(parent1, parent2) do
+    point = :rand.uniform(length(parent1.genes))
+    {genes1, genes2} = Enum.split(parent1.genes, point)
+    {genes3, genes4} = Enum.split(parent2.genes, point)
+    
+    %Individual{
+      genes: genes1 ++ genes4,
+      fitness: nil
+    }
+  end
+
+  defp maybe_mutate(individual, rate) do
+    genes = Enum.map(individual.genes, fn gene ->
+      if :rand.uniform() < rate do
+        idx = Enum.find_index(@template_parts, fn parts -> Enum.member?(parts, gene) end)
+        Enum.random(Enum.at(@template_parts, idx))
+      else
+        gene
+      end
+    end)
+    
+    %{individual | genes: genes, fitness: nil}
+  end
+end
+
+# Run the algorithm with a simple map for configuration
+config = %{
+  population_size: 10,    # Smaller population for faster testing
+  max_generations: 5,     # Fewer generations for testing
+  mutation_rate: 0.1,
+  elite_size: 2,
+  tournament_size: 3
+}
+
+IO.puts("Starting Genetic Algorithm...")
+best_solution = GA.run(config)
+
+IO.puts("\nFinal Best Solution:")
+IO.puts("==================")
+IO.puts("Fitness: #{best_solution.fitness}")
+IO.puts("\nCode:")
+IO.puts(GA.create_code(best_solution))
+```
